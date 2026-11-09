@@ -17,7 +17,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 MAX_BYTES = 20 * 1024 * 1024  # 20 MiB
 
 app = FastAPI(title="File Inspector", version=VERSION)
