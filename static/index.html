@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>File Inspector</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a21;--fg:#e6e6e6;--mut:#8b93a7;--acc:#5ea1ff;--ok:#4cd27a;--warn:#ffb454}
+  *{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+  main{max-width:900px;margin:40px auto;padding:0 20px}
+  h1{font-weight:600;letter-spacing:-.5px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px}
+  #drop{border:2px dashed #2b3040;border-radius:12px;padding:40px;text-align:center;cursor:pointer;transition:.15s}
+  #drop.over{border-color:var(--acc);background:#1a2030}
+  .card{background:var(--card);border-radius:12px;padding:18px 20px;margin-top:18px}
+  .grid{display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:14px}.grid b{color:var(--mut);font-weight:500}
+  code{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all}
+  .bar{display:flex;gap:2px;height:48px;align-items:flex-end;margin-top:8px}.bar i{flex:1;background:var(--acc);border-radius:2px 2px 0 0;min-width:3px}
+  pre{background:#0b0d12;border-radius:8px;padding:12px;max-height:260px;overflow:auto;font-size:12.5px;margin:8px 0 0}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#243049;color:var(--acc)}
+  .tag.warn{background:#3a2f17;color:var(--warn)}.tag.ok{background:#17392a;color:var(--ok)}
+  footer{color:var(--mut);font-size:12px;margin-top:30px}
+</style>
+</head>
+<body><main>
+<h1>File Inspector</h1>
+<p class="sub">파일을 올리면 해시 · 엔트로피 · 타입 · 문자열을 분석합니다. <span id="ver" class="tag">v?</span></p>
+<div id="drop">여기에 파일을 드롭하거나 클릭해서 선택<input id="f" type="file" hidden></div>
+<div id="out"></div>
+<footer>API: <code>POST /api/analyze</code> (multipart <code>file</code>) · <code>GET /api/health</code> · <a href="/docs" style="color:var(--acc)">Swagger</a></footer>
+</main>
+<script>
+const $=s=>document.querySelector(s),drop=$('#drop'),f=$('#f'),out=$('#out');
+fetch('/api/health').then(r=>r.json()).then(j=>$('#ver').textContent='v'+j.version);
+drop.onclick=()=>f.click();
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>send(ev.dataTransfer.files[0]));f.onchange=()=>send(f.files[0]);
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+async function send(file){
+  if(!file)return;out.innerHTML='<div class="card">분석 중…</div>';
+  const fd=new FormData();fd.append('file',file);
+  const r=await fetch('/api/analyze',{method:'POST',body:fd});
+  if(!r.ok){out.innerHTML=`<div class="card">오류: ${r.status} ${esc(await r.text())}</div>`;return}
+  render(await r.json());
+}
+function render(j){
+  const cls=j.entropy>7.2?'warn':j.entropy>5?'':'ok';
+  const bars=j.entropy_blocks.map(e=>`<i style="height:${e/8*100}%" title="${e}"></i>`).join('');
+  const elf=j.elf?`<b>ELF</b><span>${j.elf.class}-bit ${j.elf.endian}-endian ${j.elf.type} ${j.elf.machine}</span>`:'';
+  out.innerHTML=`
+  <div class="card"><div class="grid">
+    <b>파일</b><span>${esc(j.filename)} (${j.size.toLocaleString()} bytes)</span>
+    <b>타입</b><span>${esc(j.type)}</span>${elf}
+    <b>MD5</b><code>${j.hashes.md5}</code>
+    <b>SHA-1</b><code>${j.hashes.sha1}</code>
+    <b>SHA-256</b><code>${j.hashes.sha256}</code>
+    <b>엔트로피</b><span>${j.entropy} / 8 <span class="tag ${cls}">${esc(j.entropy_hint)}</span></span>
+  </div>
+  <div class="bar">${bars}</div></div>
+  <div class="card"><b style="color:var(--mut)">Strings (${j.strings.length})</b><pre>${esc(j.strings.join('\n'))||'(none)'}</pre></div>`;
+}
+</script>
+</body></html>
